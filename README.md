@@ -48,7 +48,7 @@ Admin-tier commands may still require an elevated shell even if your account is 
 ## Install
 
 ```bash
-git clone https://github.com/aaron-kidwell/dev.git
+git clone https://github.com/aaron-kidwell/goLoL.git
 cd dev
 go mod download
 ```
