@@ -42,8 +42,8 @@ Admin-tier commands may still require an elevated shell even if your account is 
 ## Install
 
 ```bash
-git clone https://github.com/aaron-kidwell/dev.git
-cd dev
+git clone https://github.com/aaron-kidwell/goLoL.git
+cd goLoL
 go mod download
 ```
 
@@ -55,12 +55,14 @@ Run from the module root (required for `internal/` packages):
 go run .
 ```
 
-Build a binary:
+Build a binary (recommended — strips debug info, ~30% smaller):
 
 ```bash
-go build -o golol.exe .
+go build -ldflags="-s -w" -trimpath -o golol.exe .
 .\golol.exe
 ```
+
+`-s -w` removes the symbol table and DWARF debug data. A default `go build` on this project is ~9.5 MB; with those flags it drops to ~6.4 MB.
 
 ### Flags
 
