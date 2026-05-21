@@ -1,6 +1,6 @@
 # goLoL
 
-**goLoL** is a Windows host scanner that finds [LOLBAS](https://lolbas-project.github.io/) binaries present on the current machine and lists techniques you can run at your current privilege level with MITRE ATT&CK mappings and example commands.
+**goLoL** is a Windows host scanner that finds [LOLBAS](https://lolbas-project.github.io/) binaries present on the current machine and lists techniques you can run **at your current privilege level** with MITRE ATT&CK mappings and example commands.
 **Note:** This is not an OPSEC safe tool.
 **Author:** Aaron Kidwell
 
