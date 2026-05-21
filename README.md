@@ -1,7 +1,7 @@
 # goLoL
 
 **goLoL** is a Windows host scanner that finds [LOLBAS](https://lolbas-project.github.io/) binaries present on the current machine and lists techniques you can run at your current privilege level with MITRE ATT&CK mappings and example commands.
-
+**Note:** This is not an OPSEC safe tool.
 **Author:** Aaron Kidwell
 
 ```
@@ -61,7 +61,7 @@ Run from the module root (required for `internal/` packages):
 go run .
 ```
 
-Build a binary (recommended — strips debug info, ~30% smaller):
+Build a binary (recommended.. strips debug info, ~30% smaller):
 
 ```bash
 go build -ldflags="-s -w" -trimpath -o golol.exe .
