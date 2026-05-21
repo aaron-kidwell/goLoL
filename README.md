@@ -27,7 +27,7 @@
 - **MITRE ATT&CK labels** — technique IDs mapped to readable names (e.g. `T1003.003: NTDS`)
 - **Flexible sorting** — group by binary, privilege tier, or ATT&CK technique
 - **Plain output mode** — ASCII-only output for telnet, reverse shells, and other unstable terminals
-- **No child processes** — privilege checks use the process token and `net localgroup`; scanning uses standard Go file APIs
+- **Lightweight scanning** — filesystem checks via Go APIs; admin-group detection uses `net localgroup` (one child process on Windows)
 
 ## Privilege tiers
 
@@ -43,17 +43,13 @@ Admin-tier commands may still require an elevated shell even if your account is 
 
 - **Windows** (primary target; non-Windows builds stub out privilege checks)
 - **Go 1.21+** (project uses Go 1.26.2)
-- **Network access** to fetch the LOLBAS JSON catalog on first run
+- **Network access** to fetch the LOLBAS JSON catalog on each run (not cached offline)
 
 ## Install
 
 ```bash
 git clone https://github.com/aaron-kidwell/goLoL.git
-<<<<<<< HEAD
 cd goLoL
-=======
-cd dev
->>>>>>> 85ca29b46340cd805394cfb0de9f382fdfe97ae8
 go mod download
 ```
 
@@ -82,7 +78,7 @@ go build -ldflags="-s -w" -trimpath -o golol.exe .
 | `-plain` | ASCII-only output — no colors, Unicode, or cursor control |
 | `-sort` | Sort results: `binary` (default), `privilege`, or `attack` |
 
-Sort aliases: `b`, `priv` / `p`, `mitre` / `a`.
+Sort aliases: `b`, `priv` / `p`, `mitre` / `a`. Invalid values print an error and show help.
 
 ### Examples
 
@@ -90,7 +86,7 @@ Sort aliases: `b`, `priv` / `p`, `mitre` / `a`.
 # Default — grouped by binary name (A–Z)
 go run .
 
-# Admin techniques first, then user techniques
+# Admin tier first, then user tier (SYSTEM tier first when running as SYSTEM)
 go run . -sort privilege
 
 # Sorted by MITRE ATT&CK ID
@@ -105,22 +101,25 @@ go run . -plain -sort attack
 
 ### Example output
 
-**Interactive mode** (colored terminal):
+Counts and binaries vary by host. Examples below are illustrative.
+
+**Interactive mode** (colored terminal, grouped by binary):
 
 ```
-Role:        administrator
-Sort:        binary
-Binaries:    147
-Techniques:  299
+  Role:        administrator
+  Sort:        binary
+  Binaries:    147
+  Techniques:  299
 
-  [1] Esentutl.exe
+  ╭─ [1] Esentutl.exe
   Path          C:\Windows\System32\esentutl.exe
   Description   Binary for working with Microsoft JET database
-  -- technique 1
+  ├─ technique 1
   Privileges    Admin
   ATT&CK        T1003.003: NTDS
   Use case      Copy/extract a locked file such as the AD Database
   Command       esentutl.exe /y /vss c:\windows\ntds\ntds.dit /d {PATH_ABSOLUTE:.dit}
+  ╰───────────────────────────────────────────────────────────────
 ```
 
 **Plain mode** (`-plain`):
