@@ -1,4 +1,4 @@
-module dev
+module github.com/aaron-kidwell/goLoL
 
 go 1.26.2
 

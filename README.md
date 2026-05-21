@@ -47,10 +47,20 @@ Admin-tier commands may still require an elevated shell even if your account is 
 
 ## Install
 
+**Remote install** (requires a tagged release on GitHub, e.g. `v0.1.0`):
+
+```bash
+go install github.com/aaron-kidwell/goLoL@latest
+```
+
+The binary is placed in your `GOPATH/bin` (or `~/go/bin`). On Windows, ensure that directory is on your `PATH`.
+
+**Clone and build:**
+
 ```bash
 git clone https://github.com/aaron-kidwell/goLoL.git
 cd goLoL
-go mod download
+go build -ldflags="-s -w" -trimpath -o golol.exe .
 ```
 
 ## Usage
