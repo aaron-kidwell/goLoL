@@ -188,6 +188,31 @@ const (
 	sortAttack    sortMode = "attack"
 )
 
+func normalizeBinaryName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, `.\`)
+	s = strings.TrimPrefix(s, `/`)
+	s = strings.TrimSuffix(s, ".exe")
+	return s
+}
+
+func binaryNamesMatch(entryName, query string) bool {
+	return normalizeBinaryName(entryName) == normalizeBinaryName(query)
+}
+
+func displayBinaryName(query string) string {
+	q := strings.TrimSpace(query)
+	q = strings.TrimPrefix(q, `.\`)
+	q = strings.TrimPrefix(q, `/`)
+	if q == "" {
+		return query
+	}
+	if !strings.HasSuffix(strings.ToLower(q), ".exe") {
+		q += ".exe"
+	}
+	return q
+}
+
 func parseSortMode(raw string) (sortMode, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "binary", "b":
@@ -316,6 +341,7 @@ Usage:
 Flags:
   -h, -help          Show this help
   -plain             ASCII-only output for telnet/reverse shells
+  -s, -search string Search for one binary (e.g. certutil or certutil.exe)
   -sort string       Sort results (default "binary")
                        binary     Group by binary name (A-Z)
                        privilege  Admin tier first, then user tier
@@ -323,6 +349,7 @@ Flags:
 
 Examples:
   go run .
+  go run . -s certutil
   go run . -plain
   go run . -sort privilege
   go run . -sort attack
@@ -344,6 +371,7 @@ when running as SYSTEM.
 %sFlags:%s
   -h, -help          Show this help
   -plain             ASCII-only output for telnet/reverse shells
+  -s, -search string Search for one binary (e.g. certutil or certutil.exe)
   -sort string       Sort results (default "binary")
                        binary     Group by binary name (A-Z)
                        privilege  Admin tier first, then user tier
@@ -351,6 +379,7 @@ when running as SYSTEM.
 
 %sExamples:%s
   go run .
+  go run . -s certutil
   go run . -plain
   go run . -sort privilege
   go run . -sort attack
@@ -734,10 +763,14 @@ func main() {
 	help := flag.Bool("h", false, "show help")
 	helpLong := flag.Bool("help", false, "show help")
 	plainFlag := flag.Bool("plain", false, "ASCII-only output for telnet/reverse shells")
+	var searchQuery string
+	flag.StringVar(&searchQuery, "s", "", "search for a specific binary by name")
+	flag.StringVar(&searchQuery, "search", "", "search for a specific binary by name")
 	sortFlag := flag.String("sort", "binary", "sort by: binary, privilege, attack")
 	flag.Parse()
 
 	plainMode = *plainFlag
+	searchQuery = strings.TrimSpace(searchQuery)
 
 	if *help || *helpLong {
 		printHelp()
@@ -797,17 +830,30 @@ func main() {
 		return
 	}
 
-	loader.setMessage("Scanning local binaries...")
+	if searchQuery != "" {
+		loader.setMessage(fmt.Sprintf("Searching for %s...", displayBinaryName(searchQuery)))
+	} else {
+		loader.setMessage("Scanning local binaries...")
+	}
 	seenPaths := make(map[string]struct{})
 	var items []listItem
 	for i, e := range entries {
-		if i > 0 && i%40 == 0 {
+		if searchQuery != "" && !binaryNamesMatch(e.Name, searchQuery) {
+			continue
+		}
+
+		if searchQuery == "" && i > 0 && i%40 == 0 {
 			loader.setMessage(fmt.Sprintf("Scanning local binaries... (%d/%d)", i, len(entries)))
 		}
 
 		paths := entryLocalPaths(e)
 		path := primaryLocalPath(paths)
 		if path == "" {
+			if searchQuery != "" {
+				loader.finish("Not found")
+				fmt.Printf("%s is not available on disk.\n", displayBinaryName(searchQuery))
+				return
+			}
 			continue
 		}
 
@@ -818,6 +864,11 @@ func main() {
 
 		commands := runnableCommands(e, isSystem, isAdmin)
 		if len(commands) == 0 {
+			if searchQuery != "" {
+				loader.finish("No techniques")
+				fmt.Printf("%s is on disk at %s but no techniques are available at your privilege level.\n", e.Name, path)
+				return
+			}
 			continue
 		}
 
@@ -864,6 +915,11 @@ func main() {
 	}
 
 	if len(items) == 0 {
+		if searchQuery != "" {
+			loader.finish("Not found")
+			fmt.Printf("%s is not available on disk.\n", displayBinaryName(searchQuery))
+			return
+		}
 		loader.finish("No runnable binaries found")
 		fmt.Println("No runnable LOLBAS binaries found on this host.")
 		return

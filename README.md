@@ -88,6 +88,7 @@ go build -ldflags="-s -w" -trimpath -o golol.exe .
 |---|---|
 | `-h`, `-help` | Show help |
 | `-plain` | ASCII-only output — no colors, Unicode, or cursor control |
+| `-s`, `-search` | Show one binary by name (`certutil` or `certutil.exe`); reports if not on disk |
 | `-sort` | Sort results: `binary` (default), `privilege`, or `attack` |
 
 Sort aliases: `b`, `priv` / `p`, `mitre` / `a`. Invalid values print an error and show help.
@@ -97,6 +98,10 @@ Sort aliases: `b`, `priv` / `p`, `mitre` / `a`. Invalid values print an error an
 ```bash
 # Default — grouped by binary name (A–Z)
 go run .
+
+# Look up a single binary
+go run . -s certutil
+.\golol.exe -s certutil.exe
 
 # Admin tier first, then user tier (SYSTEM tier first when running as SYSTEM)
 go run . -sort privilege
