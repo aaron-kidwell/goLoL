@@ -322,13 +322,23 @@ func (l *loadingBox) finish(message string) {
 	fmt.Println()
 }
 
+func helpExeName() string {
+	if len(os.Args) > 0 {
+		if name := filepath.Base(os.Args[0]); name != "" && name != "." {
+			return name
+		}
+	}
+	return "golol.exe"
+}
+
 func printHelp() {
 	if !plainMode {
 		enableVirtualTerminal()
 	}
 	printBanner()
+	exe := helpExeName()
 	if plainMode {
-		fmt.Print(`Lists LOLBAS binaries present on this machine that match your privilege level,
+		fmt.Print(fmt.Sprintf(`Lists LOLBAS binaries present on this machine that match your privilege level,
 with ATT&CK techniques and example commands from lolbas-project.github.io.
 
 Privilege tiers: user, administrator (local Administrators group), and
@@ -336,7 +346,7 @@ SYSTEM (NT AUTHORITY\SYSTEM token). SYSTEM-tier techniques are shown only
 when running as SYSTEM.
 
 Usage:
-  go run . [flags]
+  %s [flags]
 
 Flags:
   -h, -help          Show this help
@@ -348,14 +358,14 @@ Flags:
                        attack     Sort by ATT&CK ID (Txxxx)
 
 Examples:
-  go run .
-  go run . -s certutil
-  go run . -plain
-  go run . -sort privilege
-  go run . -sort attack
-  go run . -h
+  %s
+  %s -s certutil
+  %s -plain
+  %s -sort privilege
+  %s -sort attack
+  %s -h
 
-`)
+`, exe, exe, exe, exe, exe, exe, exe))
 		return
 	}
 	fmt.Printf(`%sLists LOLBAS binaries present on this machine that match your privilege level,
@@ -366,7 +376,7 @@ SYSTEM (NT AUTHORITY\\SYSTEM token). SYSTEM-tier techniques are shown only
 when running as SYSTEM.
 
 %sUsage:%s
-  go run . [flags]
+  %s [flags]
 
 %sFlags:%s
   -h, -help          Show this help
@@ -378,14 +388,14 @@ when running as SYSTEM.
                        attack     Sort by ATT&CK ID (Txxxx)
 
 %sExamples:%s
-  go run .
-  go run . -s certutil
-  go run . -plain
-  go run . -sort privilege
-  go run . -sort attack
-  go run . -h
+  %s
+  %s -s certutil
+  %s -plain
+  %s -sort privilege
+  %s -sort attack
+  %s -h
 
-`, colorDim, colorBold, colorReset, colorBold, colorReset, colorBold, colorReset)
+`, colorDim, colorBold, colorReset, exe, colorBold, colorReset, colorBold, colorReset, exe, exe, exe, exe, exe, exe)
 }
 
 func privilegeDisplay(priv string) string {
