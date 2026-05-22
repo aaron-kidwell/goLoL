@@ -19,6 +19,8 @@
 
 ```
 
+![goLoL interactive terminal output](docs/screenshot.png)
+
 ## Features
 
 - **Live LOLBAS catalog** — pulls the latest entries from [lolbas-project.github.io](https://lolbas-project.github.io/api/lolbas.json)
@@ -111,26 +113,7 @@ go run . -plain -sort attack
 
 ### Example output
 
-Counts and binaries vary by host. Examples below are illustrative.
-
-**Interactive mode** (colored terminal, grouped by binary):
-
-```
-  Role:        administrator
-  Sort:        binary
-  Binaries:    147
-  Techniques:  299
-
-  ╭─ [1] Esentutl.exe
-  Path          C:\Windows\System32\esentutl.exe
-  Description   Binary for working with Microsoft JET database
-  ├─ technique 1
-  Privileges    Admin
-  ATT&CK        T1003.003: NTDS
-  Use case      Copy/extract a locked file such as the AD Database
-  Command       esentutl.exe /y /vss c:\windows\ntds\ntds.dit /d {PATH_ABSOLUTE:.dit}
-  ╰───────────────────────────────────────────────────────────────
-```
+Counts and binaries vary by host. The screenshot at the top of this README shows interactive mode (colored terminal, grouped by binary).
 
 **Plain mode** (`-plain`):
 
@@ -170,6 +153,8 @@ Techniques:  299
 
 ```
 .
+├── docs/
+│   └── screenshot.png            # README screenshot
 ├── main.go
 ├── internal/
 │   ├── mitre/
