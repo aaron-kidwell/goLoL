@@ -1,11 +1,17 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -33,6 +39,53 @@ type lolbasEntry struct {
 		Path string `json:"Path"`
 	} `json:"Full_Path"`
 	Commands []lolbasCommand `json:"Commands"`
+}
+
+type lolDriverSample struct {
+	Filename    string `json:"Filename"`
+	Description string `json:"Description"`
+	SHA256      string `json:"SHA256"`
+	SHA1        string `json:"SHA1"`
+	MD5         string `json:"MD5"`
+}
+
+type lolDriverCommand struct {
+	Command         string `json:"Command"`
+	Description     string `json:"Description"`
+	Usecase         string `json:"Usecase"`
+	Privileges      string `json:"Privileges"`
+	OperatingSystem string `json:"OperatingSystem"`
+}
+
+type lolDriverEntry struct {
+	ID                     string            `json:"Id"`
+	Category               string            `json:"Category"`
+	Verified               string            `json:"Verified"`
+	Commands               lolDriverCommand  `json:"Commands"`
+	Resources              []string          `json:"Resources"`
+	KnownVulnerableSamples []lolDriverSample `json:"KnownVulnerableSamples"`
+}
+
+type localDriver struct {
+	Path     string
+	Filename string
+	SHA256   string
+}
+
+type driverMatch struct {
+	Path           string
+	Filename       string
+	SHA256         string
+	Category       string
+	Verified       string
+	ID             string
+	Why            string
+	ExampleCommand string
+	Usecase        string
+	Privileges     string
+	OS             string
+	Resource       string
+	Loaded         string
 }
 
 func resolveLocalPath(documented string) string {
@@ -350,6 +403,7 @@ Usage:
 
 Flags:
   -h, -help          Show this help
+  -driver            Scan local drivers against the LOLDrivers catalog
   -plain             ASCII-only output for telnet/reverse shells
   -s, -search string Search for one binary (e.g. certutil or certutil.exe)
   -sort string       Sort results (default "binary")
@@ -359,13 +413,14 @@ Flags:
 
 Examples:
   %s
+  %s -driver
   %s -s certutil
   %s -plain
   %s -sort privilege
   %s -sort attack
   %s -h
 
-`, exe, exe, exe, exe, exe, exe, exe))
+`, exe, exe, exe, exe, exe, exe, exe, exe))
 		return
 	}
 	fmt.Printf(`%sLists LOLBAS binaries present on this machine that match your privilege level,
@@ -380,6 +435,7 @@ when running as SYSTEM.
 
 %sFlags:%s
   -h, -help          Show this help
+  -driver            Scan local drivers against the LOLDrivers catalog
   -plain             ASCII-only output for telnet/reverse shells
   -s, -search string Search for one binary (e.g. certutil or certutil.exe)
   -sort string       Sort results (default "binary")
@@ -389,13 +445,329 @@ when running as SYSTEM.
 
 %sExamples:%s
   %s
+  %s -driver
   %s -s certutil
   %s -plain
   %s -sort privilege
   %s -sort attack
   %s -h
 
-`, colorDim, colorBold, colorReset, exe, colorBold, colorReset, colorBold, colorReset, exe, exe, exe, exe, exe, exe)
+`, colorDim, colorBold, colorReset, exe, colorBold, colorReset, colorBold, colorReset, exe, exe, exe, exe, exe, exe, exe)
+}
+
+func fetchLOLDriversCatalog() ([]lolDriverEntry, error) {
+	resp, err := http.Get("https://www.loldrivers.io/api/drivers.json")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	var entries []lolDriverEntry
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func driverSearchRoots() []string {
+	windir := os.Getenv("WINDIR")
+	if windir == "" {
+		windir = os.Getenv("SystemRoot")
+	}
+	if windir == "" {
+		windir = `C:\Windows`
+	}
+	return []string{
+		filepath.Join(windir, "System32", "drivers"),
+		filepath.Join(windir, "System32", "DriverStore", "FileRepository"),
+	}
+}
+
+func hashFileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func collectLocalDrivers() ([]localDriver, error) {
+	var out []localDriver
+	seenPaths := make(map[string]struct{})
+
+	for _, root := range driverSearchRoots() {
+		if _, err := os.Stat(root); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if !strings.EqualFold(filepath.Ext(d.Name()), ".sys") {
+				return nil
+			}
+
+			key := strings.ToLower(path)
+			if _, ok := seenPaths[key]; ok {
+				return nil
+			}
+			seenPaths[key] = struct{}{}
+
+			sum, err := hashFileSHA256(path)
+			if err != nil {
+				return nil
+			}
+
+			out = append(out, localDriver{
+				Path:     path,
+				Filename: d.Name(),
+				SHA256:   strings.ToLower(sum),
+			})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func findVulnerableDrivers(catalog []lolDriverEntry, local []localDriver) []driverMatch {
+	bySHA256 := make(map[string]lolDriverEntry)
+	for _, entry := range catalog {
+		for _, sample := range entry.KnownVulnerableSamples {
+			sum := strings.ToLower(strings.TrimSpace(sample.SHA256))
+			if sum == "" {
+				continue
+			}
+			if _, exists := bySHA256[sum]; !exists {
+				bySHA256[sum] = entry
+			}
+		}
+	}
+
+	var matches []driverMatch
+	for _, d := range local {
+		entry, ok := bySHA256[d.SHA256]
+		if !ok {
+			continue
+		}
+		why := strings.TrimSpace(entry.Commands.Description)
+		if why == "" {
+			why = firstSampleDescription(entry.KnownVulnerableSamples)
+		}
+		matches = append(matches, driverMatch{
+			Path:           d.Path,
+			Filename:       d.Filename,
+			SHA256:         d.SHA256,
+			Category:       entry.Category,
+			Verified:       entry.Verified,
+			ID:             entry.ID,
+			Why:            why,
+			ExampleCommand: strings.TrimSpace(entry.Commands.Command),
+			Usecase:        strings.TrimSpace(entry.Commands.Usecase),
+			Privileges:     strings.TrimSpace(entry.Commands.Privileges),
+			OS:             strings.TrimSpace(entry.Commands.OperatingSystem),
+			Resource:       firstResource(entry.Resources),
+		})
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		ai := strings.ToLower(matches[i].Filename)
+		aj := strings.ToLower(matches[j].Filename)
+		if ai != aj {
+			return ai < aj
+		}
+		return matches[i].Path < matches[j].Path
+	})
+	return matches
+}
+
+func printDriverResults(matches []driverMatch, scanned int) {
+	if plainMode {
+		fmt.Println(strings.Repeat("=", 62))
+		fmt.Printf("Scanned drivers: %d\n", scanned)
+		fmt.Printf("Matches:         %d\n", len(matches))
+		fmt.Println(strings.Repeat("=", 62))
+		fmt.Println()
+	} else {
+		fmt.Printf("  %sScanned drivers:%s %d\n", colorDim, colorReset, scanned)
+		fmt.Printf("  %sMatches:%s         %d\n\n", colorDim, colorReset, len(matches))
+	}
+	fmt.Println("  Note: Example command comes from LOLDrivers. If the driver is already loaded,")
+	fmt.Println("  skip service creation/start and interact with the existing device interface.")
+	fmt.Println()
+
+	for i, m := range matches {
+		if i > 0 {
+			fmt.Println()
+		}
+		if plainMode {
+			fmt.Printf("  [%d] %s\n", i+1, m.Filename)
+		} else {
+			fmt.Printf("  %s╭─%s %s[%d]%s %s%s%s\n", colorCyan, colorReset, colorDim, i+1, colorReset, colorBold, m.Filename, colorReset)
+		}
+		printField("Path", m.Path)
+		printField("SHA256", m.SHA256)
+		printField("Category", m.Category)
+		printField("Verified", m.Verified)
+		printField("Loaded", m.Loaded)
+		printField("ID", m.ID)
+		if m.Why != "" {
+			printField("Why", m.Why)
+		}
+		if m.Usecase != "" {
+			printField("Use case", m.Usecase)
+		}
+		if m.Privileges != "" {
+			printField("Privileges", m.Privileges)
+		}
+		if m.OS != "" {
+			printField("OS", m.OS)
+		}
+		if m.ExampleCommand != "" {
+			printField("Example", m.ExampleCommand)
+		}
+		if m.Resource != "" {
+			printField("Source", m.Resource)
+		}
+		if plainMode {
+			fmt.Printf("  %s\n", strings.Repeat("-", 62))
+		} else {
+			fmt.Printf("  %s╰%s\n", colorCyan, strings.Repeat("─", 63))
+		}
+	}
+}
+
+func firstResource(resources []string) string {
+	for _, r := range resources {
+		r = strings.TrimSpace(r)
+		if r != "" {
+			return r
+		}
+	}
+	return ""
+}
+
+func firstSampleDescription(samples []lolDriverSample) string {
+	for _, s := range samples {
+		desc := strings.TrimSpace(s.Description)
+		if desc != "" {
+			return desc
+		}
+	}
+	return ""
+}
+
+func normalizeDriverName(name string) string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	n = strings.TrimSuffix(n, ".sys")
+	return n
+}
+
+func loadedDriverNames() map[string]struct{} {
+	loaded := make(map[string]struct{})
+
+	// service names of loaded kernel/file system drivers
+	out, err := exec.Command("sc.exe", "query", "type=", "driver", "state=", "all").Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			const prefix = "SERVICE_NAME:"
+			if strings.HasPrefix(line, prefix) {
+				name := normalizeDriverName(strings.TrimSpace(strings.TrimPrefix(line, prefix)))
+				if name != "" {
+					loaded[name] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// module names currently loaded by the OS
+	out, err = exec.Command("driverquery", "/fo", "csv", "/nh").Output()
+	if err == nil {
+		r := csv.NewReader(strings.NewReader(string(out)))
+		for {
+			rec, err := r.Read()
+			if err != nil {
+				break
+			}
+			if len(rec) < 1 {
+				continue
+			}
+			name := normalizeDriverName(rec[0])
+			if name != "" {
+				loaded[name] = struct{}{}
+			}
+		}
+	}
+	return loaded
+}
+
+func annotateLoadedState(matches []driverMatch) {
+	if runtime.GOOS != "windows" {
+		for i := range matches {
+			matches[i].Loaded = "unknown"
+		}
+		return
+	}
+
+	loaded := loadedDriverNames()
+	for i := range matches {
+		name := normalizeDriverName(matches[i].Filename)
+		if _, ok := loaded[name]; ok {
+			matches[i].Loaded = "yes"
+		} else {
+			matches[i].Loaded = "no"
+		}
+	}
+}
+
+func runDriverMode(loader *loadingBox) error {
+	if runtime.GOOS != "windows" {
+		return fmt.Errorf("driver scan is currently supported on Windows hosts only")
+	}
+
+	loader.setMessage("Fetching LOLDrivers catalog...")
+	catalog, err := fetchLOLDriversCatalog()
+	if err != nil {
+		return fmt.Errorf("failed to fetch LOLDrivers catalog: %w", err)
+	}
+
+	loader.setMessage("Hashing local drivers...")
+	local, err := collectLocalDrivers()
+	if err != nil {
+		return fmt.Errorf("failed to scan local drivers: %w", err)
+	}
+
+	loader.setMessage("Matching hashes...")
+	matches := findVulnerableDrivers(catalog, local)
+	annotateLoadedState(matches)
+	if len(matches) == 0 {
+		loader.finish("No vulnerable drivers found")
+		fmt.Printf("No known vulnerable LOLDrivers found on disk. Scanned %d local drivers.\n", len(local))
+		return nil
+	}
+
+	loader.finish(fmt.Sprintf("Found %d vulnerable drivers", len(matches)))
+	printDriverResults(matches, len(local))
+	return nil
 }
 
 func privilegeDisplay(priv string) string {
@@ -772,6 +1144,7 @@ func enableVirtualTerminal() {
 func main() {
 	help := flag.Bool("h", false, "show help")
 	helpLong := flag.Bool("help", false, "show help")
+	driverFlag := flag.Bool("driver", false, "scan local drivers against the LOLDrivers catalog")
 	plainFlag := flag.Bool("plain", false, "ASCII-only output for telnet/reverse shells")
 	var searchQuery string
 	flag.StringVar(&searchQuery, "s", "", "search for a specific binary by name")
@@ -793,6 +1166,16 @@ func main() {
 		printHelp()
 		os.Exit(2)
 	}
+	if *driverFlag {
+		if searchQuery != "" {
+			fmt.Fprintln(os.Stderr, "-driver cannot be combined with -s/-search")
+			os.Exit(2)
+		}
+		if sortMode != sortBinary {
+			fmt.Fprintln(os.Stderr, "-driver does not support -sort (only default binary mode)")
+			os.Exit(2)
+		}
+	}
 
 	if !plainMode {
 		enableVirtualTerminal()
@@ -801,6 +1184,14 @@ func main() {
 
 	loader := newLoadingBox("Checking privileges...")
 	loader.start()
+
+	if *driverFlag {
+		if err := runDriverMode(loader); err != nil {
+			loader.finish("Failed")
+			fmt.Println(err)
+		}
+		return
+	}
 
 	loader.setMessage("Checking process token...")
 	isSystem, err := privileges.IsLocalSystem()

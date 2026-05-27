@@ -28,6 +28,7 @@
 - **Privilege-aware filtering** — shows only techniques runnable at your current tier
 - **MITRE ATT&CK labels** — technique IDs mapped to readable names (e.g. `T1003.003: NTDS`)
 - **Flexible sorting** — group by binary, privilege tier, or ATT&CK technique
+- **Driver mode** — hashes local `.sys` files and matches against the live [LOLDrivers](https://www.loldrivers.io/) JSON catalog
 - **Plain output mode** — ASCII-only output for telnet, reverse shells, and other unstable terminals
 - **Lightweight scanning** — filesystem checks via Go APIs; admin-group detection uses `net localgroup` (one child process on Windows)
 
@@ -87,6 +88,7 @@ go build -ldflags="-s -w" -trimpath -o golol.exe .
 | Flag | Description |
 |---|---|
 | `-h`, `-help` | Show help |
+| `-driver` | Scan local drivers and list known vulnerable/malicious matches from LOLDrivers |
 | `-plain` | ASCII-only output — no colors, Unicode, or cursor control |
 | `-s`, `-search` | Show one binary by name (`certutil` or `certutil.exe`); reports if not on disk |
 | `-sort` | Sort results: `binary` (default), `privilege`, or `attack` |
@@ -98,6 +100,9 @@ Sort aliases: `b`, `priv` / `p`, `mitre` / `a`. Invalid values print an error an
 ```bash
 # Default — grouped by binary name (A–Z)
 go run .
+
+# Driver mode (scan local .sys files against LOLDrivers hashes)
+go run . -driver
 
 # Look up a single binary
 go run . -s certutil
@@ -142,14 +147,16 @@ Techniques:  299
 ## How it works
 
 1. Detects the current process privilege context (standard user, local admin group member, or SYSTEM).
-2. Downloads and parses the LOLBAS JSON catalog.
-3. For each entry, remaps documented paths to the local filesystem and checks whether the binary exists.
+2. In default mode, downloads and parses the LOLBAS JSON catalog.
+3. For each LOLBAS entry, remaps documented paths to the local filesystem and checks whether the binary exists.
 4. Filters commands by privilege tier and deduplicates by resolved on-disk path.
-5. Prints results with paths, ATT&CK technique, use case, and example command.
+5. In `-driver` mode, downloads the LOLDrivers JSON catalog, hashes local `.sys` files, and reports hash matches.
+6. Prints results with paths, ATT&CK technique, use case, and example command (or driver match metadata in `-driver` mode).
 
 | Component | Location |
 |---|---|
 | LOLBAS catalog | `https://lolbas-project.github.io/api/lolbas.json` |
+| LOLDrivers catalog | `https://www.loldrivers.io/api/drivers.json` |
 | Privilege detection | `internal/privileges` |
 | MITRE technique names | `internal/mitre` |
 | Path resolution & output | `main.go` |
