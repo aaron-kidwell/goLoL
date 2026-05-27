@@ -1,6 +1,6 @@
 # goLoL
 
-**goLoL** is a Windows host scanner that finds **an always up to date listing** of [LOLBAS](https://lolbas-project.github.io/) binaries present on the current machine and lists techniques you can run **at your current privilege level** with MITRE ATT&CK mappings and example commands.
+**goLoL** is a Windows host scanner with dual support for **[LOLBAS](https://lolbas-project.github.io/)** binaries and **[LOLDrivers](https://www.loldrivers.io/)**. It lists LOLBAS techniques runnable at your current privilege level (with MITRE ATT&CK mappings) and can scan local `.sys` files for vulnerable/malicious LOLDrivers hash matches.
 **Note:** This is not an OPSEC safe tool.
 **Author:** Aaron Kidwell
 
@@ -46,7 +46,7 @@ Admin-tier commands may still require an elevated shell even if your account is 
 
 - **Windows** (primary target; non-Windows builds stub out privilege checks)
 - **Go 1.21+** (project uses Go 1.26.2)
-- **Network access** to fetch the LOLBAS JSON catalog on each run (not cached offline)
+- **Network access** to fetch LOLBAS/LOLDrivers catalogs on each run (not cached offline)
 
 ## Install
 
@@ -67,6 +67,10 @@ go build -ldflags="-s -w" -trimpath -o golol.exe .
 ```
 
 ## Usage
+
+`goLoL` supports two scan modes:
+- **LOLBAS mode (default)** for living-off-the-land binaries and privilege-filtered techniques
+- **LOLDrivers mode** via `-driver` for vulnerable/malicious driver hash matches
 
 Run from the module root (required for `internal/` packages):
 
@@ -182,7 +186,7 @@ Techniques:  299
 
 For **authorized** security testing, lab use, and education only. Only run against systems you own or have explicit permission to assess. LOLBAS entries describe techniques that may be abused by attackers — use responsibly. The author is not responsible for misuse.
 
-Technique data and binary metadata are sourced from the [LOLBAS Project](https://github.com/LOLBAS-Project/LOLBAS). goLoL is not affiliated with or endorsed by the LOLBAS Project.
+Technique and metadata are sourced from the [LOLBAS Project](https://github.com/LOLBAS-Project/LOLBAS) and [LOLDrivers](https://github.com/magicsword-io/LOLDrivers). goLoL is not affiliated with or endorsed by either project.
 
 ## License
 
