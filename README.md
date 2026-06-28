@@ -23,14 +23,14 @@
 
 ## Features
 
-- **Live LOLBAS catalog** — pulls the latest entries from [lolbas-project.github.io](https://lolbas-project.github.io/api/lolbas.json)
-- **On-disk detection** — resolves documented paths to local `%WINDIR%`, `%ProgramFiles%`, `%USERPROFILE%`, and WindowsApps locations
-- **Privilege-aware filtering** — shows only techniques runnable at your current tier
-- **MITRE ATT&CK labels** — technique IDs mapped to readable names (e.g. `T1003.003: NTDS`)
-- **Flexible sorting** — group by binary, privilege tier, or ATT&CK technique
-- **Driver mode** — hashes local `.sys` files and matches against the live [LOLDrivers](https://www.loldrivers.io/) JSON catalog
-- **Plain output mode** — ASCII-only output for telnet, reverse shells, and other unstable terminals
-- **Lightweight scanning** — filesystem checks via Go APIs; admin-group detection uses `net localgroup` (one child process on Windows)
+- **Live LOLBAS catalog**: pulls the latest entries from [lolbas-project.github.io](https://lolbas-project.github.io/api/lolbas.json)
+- **On-disk detection**: resolves documented paths to local `%WINDIR%`, `%ProgramFiles%`, `%USERPROFILE%`, and WindowsApps locations
+- **Privilege-aware filtering**: shows only techniques runnable at your current tier
+- **MITRE ATT&CK labels**: technique IDs mapped to readable names (e.g. `T1003.003: NTDS`)
+- **Flexible sorting**: group by binary, privilege tier, or ATT&CK technique
+- **Driver mode**: hashes local `.sys` files and matches against the live [LOLDrivers](https://www.loldrivers.io/) JSON catalog
+- **Plain output mode**: ASCII-only output for telnet, reverse shells, and other unstable terminals
+- **Lightweight scanning**: filesystem checks via Go APIs; admin-group detection uses `net localgroup` (one child process on Windows)
 
 ## Privilege tiers
 
@@ -93,7 +93,7 @@ go build -ldflags="-s -w" -trimpath -o golol.exe .
 |---|---|
 | `-h`, `-help` | Show help |
 | `-driver` | Scan local drivers and list known vulnerable/malicious matches from LOLDrivers |
-| `-plain` | ASCII-only output — no colors, Unicode, or cursor control |
+| `-plain` | ASCII-only output (no colors, Unicode, or cursor control) |
 | `-s`, `-search` | Show one binary by name (`certutil` or `certutil.exe`); reports if not on disk |
 | `-sort` | Sort results: `binary` (default), `privilege`, or `attack` |
 
@@ -102,7 +102,7 @@ Sort aliases: `b`, `priv` / `p`, `mitre` / `a`. Invalid values print an error an
 ### Examples
 
 ```bash
-# Default — grouped by binary name (A–Z)
+# Default: grouped by binary name (A-Z)
 go run .
 
 # Driver mode (scan local .sys files against LOLDrivers hashes)
@@ -174,7 +174,7 @@ Techniques:  299
 ├── main.go
 ├── internal/
 │   ├── mitre/
-│   │   └── names.go              # MITRE ATT&CK ID → label map
+│   │   └── names.go              # MITRE ATT&CK ID to label map
 │   └── privileges/
 │       ├── privileges_windows.go # Token / Administrators group checks
 │       └── privileges_stub.go    # Non-Windows stub
@@ -184,7 +184,7 @@ Techniques:  299
 
 ## Disclaimer
 
-For **authorized** security testing, lab use, and education only. Only run against systems you own or have explicit permission to assess. LOLBAS entries describe techniques that may be abused by attackers — use responsibly. The author is not responsible for misuse.
+For **authorized** security testing, lab use, and education only. Only run against systems you own or have explicit permission to assess. LOLBAS entries describe techniques that may be abused by attackers, so use responsibly. The author is not responsible for misuse.
 
 Technique and metadata are sourced from the [LOLBAS Project](https://github.com/LOLBAS-Project/LOLBAS) and [LOLDrivers](https://github.com/magicsword-io/LOLDrivers). goLoL is not affiliated with or endorsed by either project.
 
